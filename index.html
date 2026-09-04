@@ -882,93 +882,149 @@ function renderSticker(data){
   c.width = SIZE; c.height = SIZE;
   var ctx = c.getContext("2d");
   ctx.imageSmoothingEnabled = false;
-  // transparent background: no fillRect over the full canvas
+  // canvas starts fully transparent; only the card (below) is painted opaque.
 
   function px(x, y, w, h, color){
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x*S), Math.round(y*S), Math.max(1, Math.round(w*S)), Math.max(1, Math.round(h*S)));
   }
-  // frame content spans grid x [10, 98] -- 88 grid units wide.
-  var TEXT_MAX_W = 88 * S;
-  function text(str, x, y, size, color, font){
+  // content spans grid x [10, 98] -- 88 grid units wide, inside the card.
+  var CONTENT_X0 = 10, CONTENT_X1 = 98, CONTENT_W = CONTENT_X1 - CONTENT_X0;
+  var PIXEL_FONT = "'Press Start 2P', monospace";
+  var MONO_FONT = "ui-monospace, monospace";
+  // draws text, shrinking the font so it never exceeds maxWUnits (grid units,
+  // default: remaining content width from x). Returns the font size actually
+  // used, in grid units, so callers can lay out the next line.
+  function text(str, x, y, size, color, font, maxWUnits){
     ctx.fillStyle = color;
-    var fam = font || "'Press Start 2P', monospace";
+    var fam = font || PIXEL_FONT;
     var px2 = size * S;
     ctx.font = Math.round(px2) + "px " + fam;
     ctx.textBaseline = "top";
-    // shrink long strings so they never overflow the frame width
     var w = ctx.measureText(str).width;
-    var maxW = TEXT_MAX_W - Math.round(x*S) + (4*S);
+    var maxW = (maxWUnits !== undefined ? maxWUnits : (CONTENT_X1 - x)) * S;
     if (w > maxW && w > 0) {
       var scale = maxW / w;
-      px2 = Math.max(8, Math.floor(px2 * scale));
+      px2 = Math.max(1, Math.floor(px2 * scale));
       ctx.font = Math.round(px2) + "px " + fam;
     }
     ctx.fillText(str, Math.round(x*S), Math.round(y*S));
+    return px2 / S;
   }
 
-  var AMBER = "#FFB01E", FG = "#F2EFE6", DIM = "#b9b6ab";
+  var AMBER = "#FFB01E", AMBER_LIGHT = "#FFD37A", AMBER_DEEP = "#8A5E00";
+  var FG = "#F2EFE6", DIM = "#8a8a80";
+  var CARD_BG = "#0B0B0E", PANEL_BG = "#15151A", SHADOW = "#000000";
 
-  // frame
-  px(4,4,100,100,"rgba(0,0,0,0.001)"); // no-op keeps transparent bg untouched
-  ctx.strokeStyle = AMBER;
-  ctx.lineWidth = S*2;
-  ctx.strokeRect(4*S, 4*S, 100*S, 100*S);
+  // ---- opaque card, transparent margin outside it ----
+  px(4, 4, 100, 100, CARD_BG);
+  // 3-grid-unit amber border, hard corners
+  px(4, 4, 100, 3, AMBER);
+  px(4, 101, 100, 3, AMBER);
+  px(4, 4, 3, 100, AMBER);
+  px(101, 4, 3, 100, AMBER);
+  // bevel: lighter amber highlight top/left, deep amber shadow bottom/right,
+  // just inside the border
+  px(7, 7, 94, 1, AMBER_LIGHT);
+  px(7, 7, 1, 94, AMBER_LIGHT);
+  px(7, 100, 94, 1, AMBER_DEEP);
+  px(100, 7, 1, 94, AMBER_DEEP);
 
-  // wordmark
-  text("WORTH IT?", 10, 8, 6.5, FG);
+  var y = 10;
 
-  // pixel mug, top-right
-  var mugX = 86, mugY = 8;
+  // ---- header: wordmark + pixel mug ----
+  text("WORTH IT?", CONTENT_X0, y, 6, AMBER, PIXEL_FONT, CONTENT_W - 8);
+  var mugX = 91, mugY = y;
   var body = [[0,1],[1,1],[2,1],[3,1],[0,2],[3,2],[0,3],[3,3],[0,4],[1,4],[2,4],[3,4]];
   for (var i=0;i<body.length;i++){ px(mugX+body[i][0], mugY+body[i][1], 1, 1, AMBER); }
   px(mugX,mugY,1,1,FG); px(mugX+1,mugY,1,1,FG); px(mugX+2,mugY,1,1,FG); px(mugX+3,mugY,1,1,FG);
   px(mugX+4, mugY+1.5, 1, 2, AMBER);
+  y += 9;
 
-  // hero beer count -- must dominate the card
+  // thin dim rule under the header
+  px(CONTENT_X0, y, CONTENT_W, 1, DIM);
+  y += 4;
+
+  // ---- hero: beer count, by far the biggest element ----
+  // Work out ahead of time which lower blocks will actually render, so the
+  // hero (and its gaps) can expand to fill the card when they're absent --
+  // there should be no large empty region, even on a sparse/minimal session.
   var beerCount = data.beers ? data.beers.length : 0;
-  text("BEERS", 10, 22, 3.5, DIM);
-  text(String(beerCount), 9, 28, 22, AMBER);
+  var hrColsPreview = (data.hs !== null) + (data.ha !== null) + (data.hp !== null);
+  var willHaveTrace = data.trace && data.trace.length > 1;
+  var willHaveQuote = (data.pr === "0" || data.pr === "1");
+  var lowerBlockCount = (hrColsPreview > 0 ? 1 : 0) + (willHaveTrace ? 1 : 0) + (willHaveQuote ? 1 : 0);
 
-  // duration / date
+  text("BEERS", CONTENT_X0, y, 3, DIM, PIXEL_FONT);
+  y += 4;
+  var heroStr = String(beerCount);
+  // fewer blocks below -> the hero can grow to fill the extra vertical space
+  var heroSize = lowerBlockCount >= 2 ? 24 : (lowerBlockCount === 1 ? 28 : 34);
+  // 1-unit dark offset shadow, then amber on top, for the arcade-type look
+  text(heroStr, CONTENT_X0 + 1, y + 1, heroSize, SHADOW, PIXEL_FONT);
+  var heroUsed = text(heroStr, CONTENT_X0, y, heroSize, AMBER, PIXEL_FONT);
+  y += heroUsed + (lowerBlockCount >= 2 ? 4 : 8);
+
+  // ---- date / duration ----
   var duration = (data.en !== null && data.sa !== null) ? Math.max(0, data.en - data.sa) : null;
-  text(fmtDate(data.sa), 10, 54, 3.6, FG, "ui-monospace, monospace");
-  text("DUR " + fmtDur(duration), 10, 61, 3.6, DIM, "ui-monospace, monospace");
+  text(fmtDate(data.sa), CONTENT_X0, y, 3.6, FG, MONO_FONT);
+  y += 5.5;
+  text("DUR " + fmtDur(duration), CONTENT_X0, y, 3.6, DIM, MONO_FONT);
+  y += 7;
 
-  // HR stats, skip nulls
-  var hrLine = [];
-  if (data.hs !== null) hrLine.push("START " + Math.round(data.hs));
-  if (data.ha !== null) hrLine.push("AVG " + Math.round(data.ha));
-  if (data.hp !== null) hrLine.push("PEAK " + Math.round(data.hp));
-  if (hrLine.length > 0){
-    text(hrLine.join("   ") + " BPM", 10, 68, 3.6, FG, "ui-monospace, monospace");
+  // ---- HR row: START / AVG / PEAK, skip nulls, omit whole row if all null ----
+  var hrCols = [];
+  if (data.hs !== null) hrCols.push({ label:"START", val:Math.round(data.hs), amber:false });
+  if (data.ha !== null) hrCols.push({ label:"AVG", val:Math.round(data.ha), amber:false });
+  if (data.hp !== null) hrCols.push({ label:"PEAK", val:Math.round(data.hp), amber:true });
+  if (hrCols.length > 0){
+    var colW = CONTENT_W / 3;
+    for (var ci=0; ci<hrCols.length; ci++){
+      var col = hrCols[ci];
+      var cx = CONTENT_X0 + ci*colW;
+      text(col.label, cx, y, 2.4, DIM, MONO_FONT, colW - 2);
+      text(String(col.val), cx, y + 4, 6, col.amber ? AMBER : FG, PIXEL_FONT, colW - 2);
+    }
+    y += 12;
   }
 
-  // small stepped HR trace
-  if (data.trace && data.trace.length > 1) {
+  // ---- reserve space at the bottom for the quote, if present ----
+  var hasQuote = (data.pr === "0" || data.pr === "1");
+  var quoteReserve = hasQuote ? 8 : 0;
+  var traceBottom = 98 - quoteReserve;
+
+  // ---- stepped HR trace, filling the remaining content height ----
+  var hasTrace = data.trace && data.trace.length > 1;
+  if (hasTrace && (traceBottom - y) >= 6) {
+    var panelTop = y, panelBottom = traceBottom;
+    px(CONTENT_X0, panelTop, CONTENT_W, panelBottom - panelTop, PANEL_BG);
+
     var sa = data.sa, en = data.en, span = Math.max(1, en - sa);
     var vals = data.trace.map(function(p){return p.bpm;});
     var minB = Math.min.apply(null, vals), maxB = Math.max.apply(null, vals);
     if (maxB - minB < 10) { maxB = minB + 10; }
-    var tx0 = 10, tx1 = 98, ty0 = 90, ty1 = 78;
+    var pad = 2;
+    var tx0 = CONTENT_X0 + pad, tx1 = CONTENT_X1 - pad;
+    var ty0 = panelBottom - pad, ty1 = panelTop + pad;
+    var TH = 2; // trace thickness, grid units
     var prevX=null, prevY=null;
     for (var ti=0; ti<data.trace.length; ti++){
       var tp = data.trace[ti];
       var x = tx0 + ((tp.t - sa)/span) * (tx1 - tx0);
-      var y = ty0 + (1 - (tp.bpm - minB)/(maxB - minB)) * (ty1 - ty0);
-      x = Math.round(x); y = Math.round(y);
+      var yy = ty0 + (1 - (tp.bpm - minB)/(maxB - minB)) * (ty1 - ty0);
+      x = Math.round(x); yy = Math.round(yy);
       if (prevX !== null){
-        px(Math.min(prevX,x), prevY, Math.max(1, Math.abs(x-prevX)), 1, FG);
-        px(x, Math.min(prevY,y), 1, Math.max(1, Math.abs(y-prevY)), FG);
+        px(Math.min(prevX,x), prevY - TH/2, Math.max(TH, Math.abs(x-prevX)), TH, AMBER);
+        px(x - TH/2, Math.min(prevY,yy), TH, Math.max(TH, Math.abs(yy-prevY)), AMBER);
       }
-      prevX = x; prevY = y;
+      prevX = x; prevY = yy;
     }
   }
 
-  // famous last words, if set -- kept inside the frame, below the trace
-  if (data.pr === "0" || data.pr === "1"){
+  // ---- famous last words, if set -- inside the frame, at the bottom ----
+  if (hasQuote){
     var flw = data.pr === "0" ? "“I'LL BE GRAND”" : "“ABSOLUTELY NOT”";
-    text(flw, 10, 94, 3.2, AMBER, "ui-monospace, monospace");
+    text(flw, CONTENT_X0, 98 - 4, 3.4, AMBER, MONO_FONT, CONTENT_W);
   }
 
   return c;
