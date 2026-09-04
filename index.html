@@ -1011,7 +1011,10 @@ function renderSticker(data){
     for (var ti=0; ti<data.trace.length; ti++){
       var tp = data.trace[ti];
       var x = tx0 + ((tp.t - sa)/span) * (tx1 - tx0);
-      var yy = ty0 + (1 - (tp.bpm - minB)/(maxB - minB)) * (ty1 - ty0);
+      // ty0 is the panel BOTTOM and ty1 the top, so (ty1 - ty0) is already
+      // negative and carries the direction. An extra (1 - norm) flipped it a
+      // second time and drew the lowest bpm at the top of the panel.
+      var yy = ty0 + ((tp.bpm - minB)/(maxB - minB)) * (ty1 - ty0);
       x = Math.round(x); yy = Math.round(yy);
       if (prevX !== null){
         px(Math.min(prevX,x), prevY - TH/2, Math.max(TH, Math.abs(x-prevX)), TH, AMBER);
