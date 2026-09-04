@@ -227,8 +227,6 @@
     width:100%;
     height:auto;
     display:block;
-    image-rendering:pixelated;
-    image-rendering:-moz-crisp-edges;
     background:#0a0a08;
     border:1px solid var(--dim);
   }
@@ -285,6 +283,8 @@
     height:3px;
     background:var(--fg);
     margin-left:2px;
+    margin-right:14px;
+    flex-shrink:0;
     box-shadow:
       3px 0 0 0 var(--fg),
       6px 0 0 0 var(--fg),
@@ -574,26 +574,27 @@ function nearestHrAt(trace, tSec, windowSec){
   return null;
 }
 
-// Pixel-faithful HR chart: drawn at a small internal resolution (deliberately
-// NOT multiplied by devicePixelRatio -- pixel art is upscaled with nearest-
-// neighbour via image-rendering:pixelated, so extra source pixels would only
-// soften the blocky look) and stretched to the full CSS width.
+// Pixel-faithful HR chart: drawn at full device resolution so axis text stays
+// sharp, with the blocky/pixel look coming from how the DATA is drawn (whole
+// -CSS-pixel snapping, stepped rectangles, square markers) rather than from a
+// starved internal buffer.
 function drawChart(canvas, data){
   var cssWidth = canvas.clientWidth || 300;
-  var PXU = 3; // one internal "pixel" = 3 CSS px on screen
   var Wcss = Math.max(280, cssWidth);
-  var Hcss = 160;
-  var W = Math.max(90, Math.round(Wcss / PXU));
-  var H = Math.round(Hcss / PXU);
-  canvas.width = W;
-  canvas.height = H;
+  var Hcss = 190;
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(Wcss * dpr);
+  canvas.height = Math.round(Hcss * dpr);
   canvas.style.width = "100%";
   canvas.style.height = Hcss + "px";
   var ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0,0,W,H);
+  ctx.clearRect(0,0,Wcss,Hcss);
 
-  var padL = 11, padR = 3, padT = 4, padB = 7;
+  // work in CSS pixels from here on
+  var W = Wcss, H = Hcss;
+  var padL = 34, padR = 8, padT = 10, padB = 20;
   var plotW = W - padL - padR;
   var plotH = H - padT - padB;
 
@@ -626,49 +627,59 @@ function drawChart(canvas, data){
     ctx.fillRect(padL, y, plotW, 1);
   }
   ctx.fillStyle = "#8a8a80";
-  ctx.font = "6px ui-monospace, monospace";
+  ctx.font = "11px ui-monospace, monospace";
   ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
   for (var g2=0; g2<=gridCount; g2++){
     var bpmVal2 = minBpm + (g2/gridCount)*(maxBpm-minBpm);
-    ctx.fillText(Math.round(bpmVal2), 0, yFor(bpmVal2));
+    var yLbl = yFor(bpmVal2);
+    yLbl = Math.max(6, Math.min(H - padB - 6, yLbl));
+    ctx.fillText(String(Math.round(bpmVal2)), padL - 4, yLbl);
   }
   ctx.textBaseline = "alphabetic";
   var xTicks = 3;
   for (var xt=0; xt<=xTicks; xt++){
     var tVal = (xt/xTicks) * span;
     var xPix = xFor(sa + tVal);
-    ctx.fillText(fmtHMM(tVal), Math.max(padL, Math.min(xPix - 6, W - padR - 16)), H - 1);
+    var label = fmtHMM(tVal);
+    if (xt === 0) { ctx.textAlign = "left"; }
+    else if (xt === xTicks) { ctx.textAlign = "right"; }
+    else { ctx.textAlign = "center"; }
+    var xLbl = xPix;
+    ctx.fillText(label, xLbl, H - 4);
   }
+  ctx.textAlign = "left";
 
   // beer markers: dashed pixel line + tiny mug glyph
   if (data.beers && data.beers.length > 0) {
     for (var bi=0; bi<data.beers.length; bi++){
-      var bx = xFor(data.beers[bi]);
+      var bx = Math.round(xFor(data.beers[bi]));
       ctx.fillStyle = "#FFB01E";
-      for (var yy = padT; yy < padT + plotH; yy += 2){
-        ctx.fillRect(bx, yy, 1, 1);
+      for (var yy = padT; yy < padT + plotH; yy += 4){
+        ctx.fillRect(bx, yy, 2, 2);
       }
-      // tiny mug: 2x2 body + 1px handle
-      ctx.fillRect(bx-1, padT-3, 2, 2);
-      ctx.fillRect(bx+1, padT-2, 1, 1);
+      // tiny mug: 4x4 body + handle, above the plot
+      ctx.fillRect(bx-2, padT-8, 4, 4);
+      ctx.fillRect(bx+2, padT-6, 2, 2);
     }
   }
 
-  // hr trace: stepped, square-snapped line
+  // hr trace: stepped, square-snapped line, 2 CSS px thick
   if (hasTrace) {
     ctx.fillStyle = "#F2EFE6";
+    var TH = 2; // trace thickness in CSS px
     var prevX = null, prevY = null;
     for (var i=0;i<trace.length;i++){
-      var px = xFor(trace[i].t);
-      var py = yFor(trace[i].bpm);
+      var px = Math.round(xFor(trace[i].t));
+      var py = Math.round(yFor(trace[i].bpm));
       if (prevX !== null) {
         // step: horizontal at prevY to px, then vertical to py
         var x0 = Math.min(prevX, px), x1 = Math.max(prevX, px);
-        ctx.fillRect(x0, prevY, Math.max(1, x1-x0), 1);
+        ctx.fillRect(x0, prevY - TH/2, Math.max(TH, x1-x0), TH);
         var y0 = Math.min(prevY, py), y1 = Math.max(prevY, py);
-        ctx.fillRect(px, y0, 1, Math.max(1, y1-y0));
+        ctx.fillRect(px - TH/2, y0, TH, Math.max(TH, y1-y0));
       }
-      ctx.fillRect(px, py, 1, 1);
+      ctx.fillRect(px - TH/2, py - TH/2, TH, TH);
       prevX = px; prevY = py;
     }
 
@@ -678,9 +689,9 @@ function drawChart(canvas, data){
         if (trace[pi].bpm === data.hp) { peakPt = trace[pi]; break; }
       }
       if (peakPt) {
-        var ppx = xFor(peakPt.t), ppy = yFor(peakPt.bpm);
+        var ppx = Math.round(xFor(peakPt.t)), ppy = Math.round(yFor(peakPt.bpm));
         ctx.fillStyle = "#FFB01E";
-        ctx.fillRect(ppx-1, ppy-1, 3, 3);
+        ctx.fillRect(ppx-2, ppy-2, 4, 4);
       }
     }
   }
@@ -875,12 +886,24 @@ function renderSticker(data){
 
   function px(x, y, w, h, color){
     ctx.fillStyle = color;
-    ctx.fillRect(Math.round(x*S), Math.round(y*S), Math.round(w*S), Math.round(h*S));
+    ctx.fillRect(Math.round(x*S), Math.round(y*S), Math.max(1, Math.round(w*S)), Math.max(1, Math.round(h*S)));
   }
+  // frame content spans grid x [10, 98] -- 88 grid units wide.
+  var TEXT_MAX_W = 88 * S;
   function text(str, x, y, size, color, font){
     ctx.fillStyle = color;
-    ctx.font = size + "px " + (font || "'Press Start 2P', monospace");
+    var fam = font || "'Press Start 2P', monospace";
+    var px2 = size * S;
+    ctx.font = Math.round(px2) + "px " + fam;
     ctx.textBaseline = "top";
+    // shrink long strings so they never overflow the frame width
+    var w = ctx.measureText(str).width;
+    var maxW = TEXT_MAX_W - Math.round(x*S) + (4*S);
+    if (w > maxW && w > 0) {
+      var scale = maxW / w;
+      px2 = Math.max(8, Math.floor(px2 * scale));
+      ctx.font = Math.round(px2) + "px " + fam;
+    }
     ctx.fillText(str, Math.round(x*S), Math.round(y*S));
   }
 
@@ -893,24 +916,24 @@ function renderSticker(data){
   ctx.strokeRect(4*S, 4*S, 100*S, 100*S);
 
   // wordmark
-  text("WORTH IT?", 10, 12, 7, FG);
+  text("WORTH IT?", 10, 8, 6.5, FG);
 
   // pixel mug, top-right
-  var mugX = 88, mugY = 10;
+  var mugX = 86, mugY = 8;
   var body = [[0,1],[1,1],[2,1],[3,1],[0,2],[3,2],[0,3],[3,3],[0,4],[1,4],[2,4],[3,4]];
   for (var i=0;i<body.length;i++){ px(mugX+body[i][0], mugY+body[i][1], 1, 1, AMBER); }
   px(mugX,mugY,1,1,FG); px(mugX+1,mugY,1,1,FG); px(mugX+2,mugY,1,1,FG); px(mugX+3,mugY,1,1,FG);
   px(mugX+4, mugY+1.5, 1, 2, AMBER);
 
-  // hero beer count
+  // hero beer count -- must dominate the card
   var beerCount = data.beers ? data.beers.length : 0;
-  text("BEERS", 10, 26, 4, DIM);
-  text(String(beerCount), 9, 32, 26, AMBER);
+  text("BEERS", 10, 22, 3.5, DIM);
+  text(String(beerCount), 9, 28, 22, AMBER);
 
   // duration / date
   var duration = (data.en !== null && data.sa !== null) ? Math.max(0, data.en - data.sa) : null;
-  text(fmtDate(data.sa), 10, 64, 4, FG, "ui-monospace, monospace");
-  text("DUR " + fmtDur(duration), 10, 71, 4, DIM, "ui-monospace, monospace");
+  text(fmtDate(data.sa), 10, 54, 3.6, FG, "ui-monospace, monospace");
+  text("DUR " + fmtDur(duration), 10, 61, 3.6, DIM, "ui-monospace, monospace");
 
   // HR stats, skip nulls
   var hrLine = [];
@@ -918,7 +941,7 @@ function renderSticker(data){
   if (data.ha !== null) hrLine.push("AVG " + Math.round(data.ha));
   if (data.hp !== null) hrLine.push("PEAK " + Math.round(data.hp));
   if (hrLine.length > 0){
-    text(hrLine.join("   ") + " BPM", 10, 79, 4, FG, "ui-monospace, monospace");
+    text(hrLine.join("   ") + " BPM", 10, 68, 3.6, FG, "ui-monospace, monospace");
   }
 
   // small stepped HR trace
@@ -927,7 +950,7 @@ function renderSticker(data){
     var vals = data.trace.map(function(p){return p.bpm;});
     var minB = Math.min.apply(null, vals), maxB = Math.max.apply(null, vals);
     if (maxB - minB < 10) { maxB = minB + 10; }
-    var tx0 = 10, tx1 = 98, ty0 = 96, ty1 = 86;
+    var tx0 = 10, tx1 = 98, ty0 = 90, ty1 = 78;
     var prevX=null, prevY=null;
     for (var ti=0; ti<data.trace.length; ti++){
       var tp = data.trace[ti];
@@ -935,20 +958,98 @@ function renderSticker(data){
       var y = ty0 + (1 - (tp.bpm - minB)/(maxB - minB)) * (ty1 - ty0);
       x = Math.round(x); y = Math.round(y);
       if (prevX !== null){
-        px(Math.min(prevX,x), prevY, Math.max(1, Math.abs(x-prevX)), 0.6, FG);
-        px(x, Math.min(prevY,y), 0.6, Math.max(1, Math.abs(y-prevY)), FG);
+        px(Math.min(prevX,x), prevY, Math.max(1, Math.abs(x-prevX)), 1, FG);
+        px(x, Math.min(prevY,y), 1, Math.max(1, Math.abs(y-prevY)), FG);
       }
       prevX = x; prevY = y;
     }
   }
 
-  // famous last words, if set
+  // famous last words, if set -- kept inside the frame, below the trace
   if (data.pr === "0" || data.pr === "1"){
     var flw = data.pr === "0" ? "“I'LL BE GRAND”" : "“ABSOLUTELY NOT”";
-    text(flw, 10, 100, 3.4, AMBER, "ui-monospace, monospace");
+    text(flw, 10, 94, 3.2, AMBER, "ui-monospace, monospace");
   }
 
   return c;
+}
+
+// ---------- sticker share: eager build + synchronous share call ----------
+// navigator.share() requires transient user activation from the click. Any
+// await before calling it (even just `await document.fonts.ready`) pushes it
+// outside that window and iOS Safari / Android Chrome reject it silently. So
+// the File is built ONCE, eagerly, off the click path, and cached here; the
+// click handler then calls navigator.share() synchronously against the cache.
+var cachedStickerFile = null;
+var cachedStickerUrl = null;
+var cachedStickerFname = null;
+var cachedStickerBuildPromise = null;
+
+function buildStickerAsync(data){
+  if (cachedStickerBuildPromise) return cachedStickerBuildPromise;
+  cachedStickerBuildPromise = (async function(){
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
+    var canvas = renderSticker(data);
+    var blob = await new Promise(function(resolve){ canvas.toBlob(resolve, "image/png"); });
+    if (!blob) throw new Error("Couldn't generate the sticker.");
+    var dateSlug = fmtDate(data.sa).replace(/[^a-z0-9]+/gi,'-').toLowerCase().replace(/^-+|-+$/g,'') || "session";
+    var fname = "worth-it-" + dateSlug + ".png";
+    var url = URL.createObjectURL(blob);
+    var file = null;
+    try { file = new File([blob], fname, {type:"image/png"}); } catch(e) { file = null; }
+    cachedStickerFile = file;
+    cachedStickerUrl = url;
+    cachedStickerFname = fname;
+    return { file: file, url: url, fname: fname };
+  })();
+  return cachedStickerBuildPromise;
+}
+
+function showStickerPreview(previewImg, url){
+  if (!previewImg || !url) return;
+  previewImg.src = url;
+  previewImg.hidden = false;
+}
+
+function downloadSticker(url, fname, statusEl, btn){
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  statusEl.innerHTML = "Saved to your photos.<br>Instagram → your story → sticker tray → add from photos.";
+  btn.disabled = false;
+}
+
+// Click handler entry point. Stays SYNCHRONOUS up to navigator.share() so the
+// call still carries the click's transient user activation.
+function onStickerClick(data, btn, statusEl, previewImg){
+  if (cachedStickerFile && navigator.canShare && navigator.canShare({files:[cachedStickerFile]})) {
+    btn.disabled = true;
+    statusEl.hidden = false;
+    statusEl.textContent = "";
+    showStickerPreview(previewImg, cachedStickerUrl);
+    navigator.share({files:[cachedStickerFile], title:"Worth it?"}).then(function(){
+      statusEl.textContent = "";
+      btn.disabled = false;
+    }).catch(function(shareErr){
+      btn.disabled = false;
+      if (shareErr && shareErr.name === "AbortError") { statusEl.textContent = ""; return; } // user cancelled: stay silent
+      downloadSticker(cachedStickerUrl, cachedStickerFname, statusEl, btn);
+    });
+    return;
+  }
+  if (cachedStickerFile && cachedStickerUrl) {
+    // built, but Web Share (with files) isn't available here -> download directly
+    btn.disabled = true;
+    statusEl.hidden = false;
+    showStickerPreview(previewImg, cachedStickerUrl);
+    downloadSticker(cachedStickerUrl, cachedStickerFname, statusEl, btn);
+    return;
+  }
+  // eager build hasn't finished yet (rare) -- fall back to the async path
+  handleStickerShare(data, btn, statusEl, previewImg);
 }
 
 async function handleStickerShare(data, btn, statusEl, previewImg){
@@ -956,42 +1057,21 @@ async function handleStickerShare(data, btn, statusEl, previewImg){
   statusEl.hidden = false;
   statusEl.textContent = "Generating sticker…";
   try{
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
-    var canvas = renderSticker(data);
-    canvas.toBlob(async function(blob){
-      try{
-        if (!blob) { statusEl.textContent = "Couldn't generate the sticker. Try again."; btn.disabled = false; return; }
-        var dateSlug = fmtDate(data.sa).replace(/[^a-z0-9]+/gi,'-').toLowerCase().replace(/^-+|-+$/g,'') || "session";
-        var fname = "worth-it-" + dateSlug + ".png";
-        var url = URL.createObjectURL(blob);
-        previewImg.src = url;
-        previewImg.hidden = false;
-
-        var file;
-        try { file = new File([blob], fname, {type:"image/png"}); } catch(e) { file = null; }
-
-        if (file && navigator.canShare && navigator.canShare({files:[file]})) {
-          try {
-            await navigator.share({files:[file], title:"Worth it?"});
-            statusEl.textContent = "";
-            btn.disabled = false;
-            return;
-          } catch(shareErr){ /* user cancelled or unsupported -> fall through to download */ }
-        }
-
-        var a = document.createElement("a");
-        a.href = url;
-        a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        statusEl.innerHTML = "Saved to your photos.<br>Instagram → your story → sticker tray → add from photos.";
+    var built = await buildStickerAsync(data);
+    if (!built || !built.url) { statusEl.textContent = "Couldn't generate the sticker. Try again."; btn.disabled = false; return; }
+    showStickerPreview(previewImg, built.url);
+    if (built.file && navigator.canShare && navigator.canShare({files:[built.file]})) {
+      try {
+        await navigator.share({files:[built.file], title:"Worth it?"});
+        statusEl.textContent = "";
         btn.disabled = false;
-      } catch(innerErr){
-        statusEl.textContent = "Couldn't generate the sticker. Try again.";
-        btn.disabled = false;
+        return;
+      } catch(shareErr){
+        if (shareErr && shareErr.name === "AbortError") { statusEl.textContent = ""; btn.disabled = false; return; } // user cancelled: stay silent
+        /* unsupported / other error -> fall through to download */
       }
-    }, "image/png");
+    }
+    downloadSticker(built.url, built.fname, statusEl, btn);
   } catch(e){
     statusEl.textContent = "Couldn't generate the sticker. Try again.";
     btn.disabled = false;
@@ -1074,8 +1154,11 @@ function runSelfTest(container){
     var stickerPreview = document.getElementById("stickerPreview");
     stickerBtn.hidden = false;
     stickerBtn.addEventListener("click", function(){
-      handleStickerShare(parsed.data, stickerBtn, stickerStatus, stickerPreview);
+      onStickerClick(parsed.data, stickerBtn, stickerStatus, stickerPreview);
     });
+    // Build the sticker eagerly, off the click path, so a tap can call
+    // navigator.share() synchronously (see onStickerClick / buildStickerAsync).
+    try { buildStickerAsync(parsed.data).catch(function(){}); } catch(e){}
   } catch (e) {
     renderError(appEl, "Something went wrong displaying this report.");
   }
