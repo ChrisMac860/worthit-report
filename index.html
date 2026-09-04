@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Worth it? — Report</title>
+<style>
+  :root{
+    --bg:#000000;
+    --fg:#F2EFE6;
+    --dim:#8a8a80;
+    --amber:#FFB01E;
+    --line:#F2EFE6;
+    --border:2px solid var(--line);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
+  body{
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Courier New", monospace;
+    font-size:15px;
+    line-height:1.4;
+    padding:14px;
+    max-width:640px;
+    margin:0 auto;
+    -webkit-text-size-adjust:100%;
+  }
+  h1,h2,h3{font-weight:700;margin:0;text-transform:uppercase;letter-spacing:0.5px;}
+  .header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border-bottom:var(--border);
+    padding-bottom:10px;
+    margin-bottom:14px;
+  }
+  .header h1{font-size:20px;flex:1;}
+  .header .date{font-size:12px;color:var(--dim);text-transform:none;}
+  canvas#mugIcon{image-rendering:pixelated;flex-shrink:0;}
+  section{
+    border:var(--border);
+    padding:10px 12px;
+    margin-bottom:12px;
+  }
+  section > h2{
+    font-size:12px;
+    color:var(--amber);
+    margin-bottom:8px;
+    border-bottom:1px solid var(--dim);
+    padding-bottom:6px;
+  }
+  .stat-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .stat{
+    flex:1 1 30%;
+    border:1px solid var(--dim);
+    padding:8px;
+    text-align:center;
+    min-width:96px;
+  }
+  .stat .v{font-size:19px;font-weight:700;color:var(--fg);}
+  .stat .l{font-size:10px;color:var(--dim);text-transform:uppercase;margin-top:2px;}
+  canvas#hrChart{
+    width:100%;
+    height:auto;
+    display:block;
+    border:1px solid var(--dim);
+    background:#0a0a08;
+  }
+  .hr-summary{
+    display:flex;
+    justify-content:space-between;
+    margin-top:8px;
+    font-size:12px;
+  }
+  .hr-summary span b{color:var(--fg);font-size:14px;display:block;}
+  .hr-summary span{color:var(--dim);text-transform:uppercase;font-size:10px;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th,td{
+    text-align:left;
+    padding:5px 4px;
+    border-bottom:1px solid #333;
+    white-space:nowrap;
+  }
+  th{color:var(--dim);font-weight:400;text-transform:uppercase;font-size:10px;}
+  tr.current td{color:var(--amber);}
+  .beer-num{color:var(--amber);font-weight:700;}
+  .avg-gap{margin-top:8px;font-size:12px;color:var(--dim);}
+  .avg-gap b{color:var(--fg);}
+  .verdict{
+    font-size:18px;
+    font-weight:700;
+    color:var(--amber);
+    text-align:center;
+    padding:6px 0;
+  }
+  .verdict.none{color:var(--dim);font-size:14px;font-weight:400;}
+  .temp-row{display:flex;gap:8px;}
+  .temp-row .stat{flex:1;}
+  .empty{color:var(--dim);text-align:center;padding:10px 0;font-size:13px;}
+  footer{
+    text-align:center;
+    color:var(--dim);
+    font-size:11px;
+    margin-top:16px;
+    padding-top:10px;
+    border-top:1px solid #333;
+  }
+  .err-box{
+    border:var(--border);
+    padding:20px 14px;
+    text-align:center;
+    margin-top:40px;
+  }
+  .err-box h2{color:var(--amber);font-size:16px;margin-bottom:10px;}
+  .err-box p{color:var(--dim);font-size:13px;}
+  #selftest{
+    border:var(--border);
+    padding:10px 12px;
+    margin-bottom:12px;
+    font-size:12px;
+    white-space:pre-wrap;
+  }
+  .overflow-x{overflow-x:auto;}
+  a, a:visited{color:var(--amber);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <canvas id="mugIcon" width="24" height="24"></canvas>
+  <h1>Worth it?</h1>
+  <div class="date" id="sessionDate">—</div>
+</div>
+
+<div id="selftest" hidden></div>
+<div id="app"></div>
+
+<footer>Association, not cause. Heart rate rises for many reasons.</footer>
+
+<script>
+/*
+DEMO SAMPLE PAYLOAD (also used by ?demo mode):
+v1~1725400000.1725407800~1725400000.1725402500.1725404200.1725406000~300.62.300.68.300.71.300.75.300.79.300.83.300.90.300.95.300.88.300.85~62.79.95~-.-~0~1725313600.1725320800.3.71.88.1|1725227200.1725232400.2.66.80.-
+
+WIRE FORMAT
+v1~<sa>.<en>~<b1>.<b2>...~<dt>.<bpm>.<dt>.<bpm>...~<hs>.<ha>.<hp>~<ts>.<te>~<pr>~<prev>|<prev>...
+Sections separated by ~, in order: version, times, beers, hrTrace, hrStats, temp, prediction, previous.
+- times: sa=session start epoch sec, en=end epoch (may be "-" -> auto-closed, use last beer as end)
+- beers: absolute epoch seconds, ascending; first beer == sa
+- hrTrace: flat alternating dt,bpm; dt = seconds since PREVIOUS point (first dt = since sa); may be empty
+- hrStats: start.avg.peak bpm; any may be "-"
+- temp: start.end tenths of C; "-" when no sensor; hide section when both "-"
+- prediction: 0 = "I'll be grand", 1 = "Absolutely not", "-" = not asked
+- previous: |-separated "sa.en.beers.ha.hp.pr", newest first, up to 5; may be empty
+- any field "-" means null. Malformed input -> friendly error, never blank/JS error.
+*/
+
+var DEMO_PAYLOAD = "v1~1725400000.1725407800~1725400000.1725402500.1725404200.1725406000~300.62.300.68.300.71.300.75.300.79.300.83.300.90.300.95.300.88.300.85~62.79.95~-.-~0~1725313600.1725320800.3.71.88.1|1725227200.1725232400.2.66.80.-";
+
+// ---------- helpers ----------
+function num(s){
+  if (s === undefined || s === null || s === "-" || s === "") return null;
+  var n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function isPosInt(n){ return n !== null && isFinite(n) && n >= 0; }
+
+function pad2(n){ return (n < 10 ? "0" : "") + n; }
+
+function fmtClock(epochSec){
+  if (epochSec === null) return "—";
+  var d = new Date(epochSec * 1000);
+  if (isNaN(d.getTime())) return "—";
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+function fmtDate(epochSec){
+  if (epochSec === null) return "—";
+  var d = new Date(epochSec * 1000);
+  if (isNaN(d.getTime())) return "—";
+  var days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return days[d.getDay()] + " " + d.getDate() + " " + mons[d.getMonth()] + " " + d.getFullYear();
+}
+function fmtDur(sec){
+  if (sec === null || sec < 0) return "—";
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  if (h <= 0) return m + "m";
+  return h + "h " + m + "m";
+}
+function fmtHMM(sec){
+  // hours:minutes from a duration in seconds, for chart x-axis
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  return h + ":" + pad2(m);
+}
+
+// ---------- parser ----------
+// returns { ok:true, data:{...} } or { ok:false, error:"..." }
+function parseFragment(raw){
+  try {
+    if (typeof raw !== "string" || raw.length === 0) {
+      return { ok:false, error:"Empty report" };
+    }
+    var parts = raw.split("~");
+    if (parts.length < 7) return { ok:false, error:"Malformed report (missing sections)" };
+    var version = parts[0];
+    if (version !== "v1") return { ok:false, error:"Unsupported report version" };
+
+    var timesRaw = parts[1] || "";
+    var beersRaw = parts[2] || "";
+    var traceRaw = parts[3] || "";
+    var hrStatsRaw = parts[4] || "";
+    var tempRaw = parts[5] || "";
+    var predRaw = parts[6] !== undefined ? parts[6] : "-";
+    var prevRaw = parts[7] !== undefined ? parts[7] : "";
+
+    // times
+    var timesParts = timesRaw.split(".");
+    var sa = num(timesParts[0]);
+    var en = num(timesParts[1]);
+    if (!isPosInt(sa)) return { ok:false, error:"Malformed report (bad start time)" };
+
+    // beers
+    var beers = [];
+    if (beersRaw.length > 0) {
+      var bparts = beersRaw.split(".");
+      for (var i = 0; i < bparts.length; i++) {
+        var b = num(bparts[i]);
+        if (b !== null) beers.push(b);
+      }
+    }
+    // fallback end: last beer if en missing
+    if (en === null) {
+      if (beers.length > 0) en = beers[beers.length - 1];
+      else en = sa;
+    }
+
+    // hr trace: dt,bpm pairs -> absolute epoch points
+    var trace = [];
+    if (traceRaw.length > 0) {
+      var tparts = traceRaw.split(".");
+      var cursor = sa;
+      for (var j = 0; j + 1 < tparts.length; j += 2) {
+        var dt = num(tparts[j]);
+        var bpm = num(tparts[j+1]);
+        if (dt === null || bpm === null) continue;
+        cursor = cursor + dt;
+        trace.push({ t: cursor, bpm: bpm });
+      }
+    }
+
+    // hr stats
+    var hsParts = hrStatsRaw.split(".");
+    var hs = num(hsParts[0]);
+    var ha = num(hsParts[1]);
+    var hp = num(hsParts[2]);
+
+    // temp
+    var tParts = tempRaw.split(".");
+    var ts = num(tParts[0]);
+    var te = num(tParts[1]);
+
+    // prediction
+    var pr = (predRaw === "0" || predRaw === "1") ? predRaw : null;
+
+    // previous sessions
+    var previous = [];
+    if (prevRaw && prevRaw.length > 0) {
+      var pItems = prevRaw.split("|");
+      for (var k = 0; k < pItems.length; k++) {
+        var pi = pItems[k];
+        if (!pi) continue;
+        var pp = pi.split(".");
+        var psa = num(pp[0]);
+        var pen = num(pp[1]);
+        var pbeers = num(pp[2]);
+        var pha = num(pp[3]);
+        var php = num(pp[4]);
+        var ppr = (pp[5] === "0" || pp[5] === "1") ? pp[5] : null;
+        if (psa === null) continue;
+        previous.push({ sa: psa, en: pen, beers: pbeers, ha: pha, hp: php, pr: ppr });
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        sa: sa, en: en,
+        beers: beers,
+        trace: trace,
+        hs: hs, ha: ha, hp: hp,
+        ts: ts, te: te,
+        pr: pr,
+        previous: previous
+      }
+    };
+  } catch (e) {
+    return { ok:false, error:"Couldn't read this report" };
+  }
+}
+
+// ---------- rendering ----------
+function drawMugIcon(canvas){
+  var ctx = canvas.getContext("2d");
+  var s = 3; // pixel scale
+  ctx.clearRect(0,0,24,24);
+  ctx.fillStyle = "#FFB01E";
+  // simple pixel mug: body + handle + foam
+  var body = [
+    [1,2],[2,2],[3,2],[4,2],
+    [1,3],[4,3],
+    [1,4],[4,4],
+    [1,5],[4,5],
+    [1,6],[2,6],[3,6],[4,6]
+  ];
+  for (var i=0;i<body.length;i++){
+    ctx.fillRect(body[i][0]*s, body[i][1]*s, s, s);
+  }
+  // handle
+  ctx.fillRect(5*s, 3*s, s, s);
+  ctx.fillRect(5*s, 4*s, s, s);
+  ctx.fillRect(5*s, 5*s, s, s);
+  // foam
+  ctx.fillStyle = "#F2EFE6";
+  ctx.fillRect(1*s, 1*s, s, s);
+  ctx.fillRect(2*s, 1*s, s, s);
+  ctx.fillRect(3*s, 1*s, s, s);
+  ctx.fillRect(4*s, 1*s, s, s);
+}
+
+function nearestHrAt(trace, tSec, windowSec){
+  if (!trace || trace.length === 0) return null;
+  var best = null, bestDiff = Infinity;
+  for (var i=0;i<trace.length;i++){
+    var diff = Math.abs(trace[i].t - tSec);
+    if (diff < bestDiff) { bestDiff = diff; best = trace[i]; }
+  }
+  if (best && bestDiff <= windowSec) return best.bpm;
+  return null;
+}
+
+function drawChart(canvas, data){
+  var cssWidth = canvas.clientWidth || 300;
+  var dpr = window.devicePixelRatio || 1;
+  var W = Math.max(280, cssWidth);
+  var H = 160;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  var ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  var padL = 34, padR = 10, padT = 12, padB = 20;
+  var plotW = W - padL - padR;
+  var plotH = H - padT - padB;
+
+  var sa = data.sa, en = data.en;
+  var span = Math.max(1, en - sa);
+
+  var trace = data.trace;
+  var hasTrace = trace && trace.length > 0;
+
+  // bpm range
+  var minBpm = 40, maxBpm = 160;
+  if (hasTrace) {
+    var vals = trace.map(function(p){return p.bpm;});
+    minBpm = Math.min.apply(null, vals);
+    maxBpm = Math.max.apply(null, vals);
+  }
+  if (data.hp !== null) maxBpm = Math.max(maxBpm, data.hp);
+  if (data.hs !== null) minBpm = Math.min(minBpm, data.hs);
+  minBpm = Math.floor((minBpm - 5) / 10) * 10;
+  maxBpm = Math.ceil((maxBpm + 5) / 10) * 10;
+  if (maxBpm - minBpm < 20) maxBpm = minBpm + 20;
+
+  function xFor(t){ return padL + ((t - sa) / span) * plotW; }
+  function yFor(bpm){ return padT + (1 - (bpm - minBpm) / (maxBpm - minBpm)) * plotH; }
+
+  ctx.strokeStyle = "#333";
+  ctx.fillStyle = "#8a8a80";
+  ctx.font = "9px ui-monospace, monospace";
+  ctx.lineWidth = 1;
+
+  // gridlines (y)
+  var gridCount = 4;
+  for (var g=0; g<=gridCount; g++){
+    var bpmVal = minBpm + (g/gridCount)*(maxBpm-minBpm);
+    var y = yFor(bpmVal);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(W - padR, y);
+    ctx.stroke();
+    ctx.fillText(Math.round(bpmVal), 2, y + 3);
+  }
+
+  // x-axis labels (h:mm) - 4 ticks
+  var xTicks = 4;
+  for (var xt=0; xt<=xTicks; xt++){
+    var tVal = (xt/xTicks) * span;
+    var xPix = xFor(sa + tVal);
+    ctx.fillText(fmtHMM(tVal), Math.min(xPix - 8, W - padR - 24), H - 4);
+  }
+
+  // beer markers
+  ctx.strokeStyle = "#FFB01E";
+  ctx.fillStyle = "#FFB01E";
+  ctx.lineWidth = 2;
+  if (data.beers && data.beers.length > 0) {
+    for (var bi=0; bi<data.beers.length; bi++){
+      var bx = xFor(data.beers[bi]);
+      ctx.beginPath();
+      ctx.moveTo(bx, padT);
+      ctx.lineTo(bx, padT + plotH);
+      ctx.stroke();
+      ctx.font = "9px ui-monospace, monospace";
+      ctx.fillText(String(bi+1), bx - 3, padT - 2);
+    }
+  }
+
+  // hr trace line
+  if (hasTrace) {
+    ctx.strokeStyle = "#F2EFE6";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (var i=0;i<trace.length;i++){
+      var px = xFor(trace[i].t);
+      var py = yFor(trace[i].bpm);
+      if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+
+    // mark peak
+    if (data.hp !== null) {
+      var peakPt = null;
+      for (var pi=0; pi<trace.length; pi++){
+        if (trace[pi].bpm === data.hp) { peakPt = trace[pi]; break; }
+      }
+      if (peakPt) {
+        var ppx = xFor(peakPt.t), ppy = yFor(peakPt.bpm);
+        ctx.fillStyle = "#FFB01E";
+        ctx.beginPath();
+        ctx.arc(ppx, ppy, 3, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // border
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(padL, padT, plotW, plotH);
+}
+
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function renderReport(container, data){
+  container.innerHTML = "";
+
+  document.getElementById("sessionDate").textContent = fmtDate(data.sa);
+
+  // stats row
+  var statsSec = el("section");
+  statsSec.appendChild(el("h2","", "Session"));
+  var row = el("div","stat-row");
+  var duration = (data.en !== null && data.sa !== null) ? Math.max(0, data.en - data.sa) : null;
+  var beerCount = data.beers ? data.beers.length : 0;
+
+  function stat(v,l){
+    var s = el("div","stat");
+    s.appendChild(el("div","v", v));
+    s.appendChild(el("div","l", l));
+    return s;
+  }
+  row.appendChild(stat(String(beerCount), "Beers"));
+  row.appendChild(stat(fmtDur(duration), "Duration"));
+  row.appendChild(stat(fmtClock(data.sa) + "–" + fmtClock(data.en), "Start–End"));
+  statsSec.appendChild(row);
+  container.appendChild(statsSec);
+
+  // HR chart section
+  var hrSec = el("section");
+  hrSec.appendChild(el("h2","", "Heart Rate"));
+  var canvas = document.createElement("canvas");
+  canvas.id = "hrChart";
+  hrSec.appendChild(canvas);
+
+  var hrSum = el("div","hr-summary");
+  function hrStatBlock(label, val){
+    var d = document.createElement("div");
+    var l = el("span","", label);
+    var b = document.createElement("b");
+    b.textContent = (val === null || val === undefined) ? "—" : (Math.round(val) + " bpm");
+    d.appendChild(l);
+    d.appendChild(b);
+    return d;
+  }
+  hrSum.appendChild(hrStatBlock("Start", data.hs));
+  hrSum.appendChild(hrStatBlock("Average", data.ha));
+  hrSum.appendChild(hrStatBlock("Peak", data.hp));
+  hrSec.appendChild(hrSum);
+
+  if ((!data.trace || data.trace.length === 0) && data.hs === null && data.ha === null && data.hp === null) {
+    hrSec.appendChild(el("div","empty","No HR data for this session."));
+  }
+  container.appendChild(hrSec);
+
+  // draw chart after it's in the DOM (needs layout width)
+  requestAnimationFrame(function(){
+    try { drawChart(canvas, data); } catch(e) {}
+  });
+
+  // Beers table
+  var beersSec = el("section");
+  beersSec.appendChild(el("h2","", "Beers"));
+  if (!data.beers || data.beers.length === 0) {
+    beersSec.appendChild(el("div","empty","No beers logged."));
+  } else {
+    var wrap = el("div","overflow-x");
+    var table = document.createElement("table");
+    var thead = el("tr","", "<th>#</th><th>Time</th><th>Gap</th><th>HR</th>");
+    table.appendChild(thead);
+    var gaps = [];
+    for (var i=0;i<data.beers.length;i++){
+      var t = data.beers[i];
+      var gapMin = i === 0 ? null : Math.round((t - data.beers[i-1]) / 60);
+      if (gapMin !== null) gaps.push(gapMin);
+      var hrAt = nearestHrAt(data.trace, t, 120);
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td class='beer-num'>" + (i+1) + "</td>" +
+        "<td>" + fmtClock(t) + "</td>" +
+        "<td>" + (gapMin === null ? "—" : gapMin + "m") + "</td>" +
+        "<td>" + (hrAt === null ? "—" : Math.round(hrAt) + " bpm") + "</td>";
+      table.appendChild(tr);
+    }
+    wrap.appendChild(table);
+    beersSec.appendChild(wrap);
+    if (gaps.length > 0) {
+      var avgGap = Math.round(gaps.reduce(function(a,b){return a+b;},0) / gaps.length);
+      beersSec.appendChild(el("div","avg-gap","Average gap: <b>" + avgGap + "m</b>"));
+    }
+  }
+  container.appendChild(beersSec);
+
+  // Famous last words
+  var flwSec = el("section");
+  flwSec.appendChild(el("h2","", "Famous Last Words"));
+  var verdictText, verdictCls;
+  if (data.pr === "0") { verdictText = "“I'll be grand”"; verdictCls = "verdict"; }
+  else if (data.pr === "1") { verdictText = "“Absolutely not”"; verdictCls = "verdict"; }
+  else { verdictText = "Not asked"; verdictCls = "verdict none"; }
+  flwSec.appendChild(el("div", verdictCls, verdictText));
+  container.appendChild(flwSec);
+
+  // Temperature (only if present)
+  if (data.ts !== null || data.te !== null) {
+    var tempSec = el("section");
+    tempSec.appendChild(el("h2","", "Temperature (supporting data)"));
+    var tRow = el("div","temp-row");
+    var tsC = data.ts !== null ? (data.ts/10).toFixed(1) + "°C" : "—";
+    var teC = data.te !== null ? (data.te/10).toFixed(1) + "°C" : "—";
+    var deltaC = (data.ts !== null && data.te !== null) ? (((data.te - data.ts)/10 >= 0 ? "+" : "") + ((data.te - data.ts)/10).toFixed(1) + "°C") : "—";
+    tRow.appendChild(stat(tsC, "Start"));
+    tRow.appendChild(stat(teC, "End"));
+    tRow.appendChild(stat(deltaC, "Change"));
+    tempSec.appendChild(tRow);
+    container.appendChild(tempSec);
+  }
+
+  // Previous sessions
+  var prevSec = el("section");
+  prevSec.appendChild(el("h2","", "Previous Sessions"));
+  if (!data.previous || data.previous.length === 0) {
+    prevSec.appendChild(el("div","empty","First recorded session."));
+  } else {
+    var pwrap = el("div","overflow-x");
+    var ptable = document.createElement("table");
+    var pthead = el("tr","", "<th>Date</th><th>Beers</th><th>Dur</th><th>Avg HR</th><th>Peak</th><th>FLW</th>");
+    ptable.appendChild(pthead);
+
+    // current session row first (highlighted), then previous
+    var curDur = (data.en !== null && data.sa !== null) ? fmtDur(Math.max(0, data.en - data.sa)) : "—";
+    var curTr = document.createElement("tr");
+    curTr.className = "current";
+    curTr.innerHTML = "<td>" + fmtDate(data.sa) + " (now)</td>" +
+      "<td>" + beerCount + "</td>" +
+      "<td>" + curDur + "</td>" +
+      "<td>" + (data.ha !== null ? Math.round(data.ha) : "—") + "</td>" +
+      "<td>" + (data.hp !== null ? Math.round(data.hp) : "—") + "</td>" +
+      "<td>" + (data.pr === "0" ? "Grand" : data.pr === "1" ? "Not" : "—") + "</td>";
+    ptable.appendChild(curTr);
+
+    for (var pj=0; pj<data.previous.length; pj++){
+      var ps = data.previous[pj];
+      var pDur = (ps.en !== null && ps.sa !== null) ? fmtDur(Math.max(0, ps.en - ps.sa)) : "—";
+      var ptr = document.createElement("tr");
+      ptr.innerHTML = "<td>" + fmtDate(ps.sa) + "</td>" +
+        "<td>" + (ps.beers === null ? "—" : ps.beers) + "</td>" +
+        "<td>" + pDur + "</td>" +
+        "<td>" + (ps.ha !== null ? Math.round(ps.ha) : "—") + "</td>" +
+        "<td>" + (ps.hp !== null ? Math.round(ps.hp) : "—") + "</td>" +
+        "<td>" + (ps.pr === "0" ? "Grand" : ps.pr === "1" ? "Not" : "—") + "</td>";
+      ptable.appendChild(ptr);
+    }
+    pwrap.appendChild(ptable);
+    prevSec.appendChild(pwrap);
+  }
+  container.appendChild(prevSec);
+}
+
+function renderError(container, message){
+  container.innerHTML = "";
+  var box = el("div","err-box");
+  box.appendChild(el("h2","", "Couldn't read this report"));
+  box.appendChild(el("p","", message || "The link may be incomplete or corrupted."));
+  container.appendChild(box);
+}
+
+// ---------- self test ----------
+function runSelfTest(container){
+  var fixtures = [
+    {
+      name: "full",
+      input: DEMO_PAYLOAD,
+      expect: function(r){ return r.ok && r.data.beers.length === 4 && r.data.trace.length === 10 && r.data.pr === "0" && r.data.previous.length === 2; }
+    },
+    {
+      name: "minimal (all dashes)",
+      input: "v1~1725400000.-~-~~-.-.-~-.-~-~",
+      expect: function(r){ return r.ok && r.data.beers.length === 0 && r.data.trace.length === 0 && r.data.hs===null && r.data.pr===null && r.data.previous.length===0 && r.data.en === r.data.sa; }
+    },
+    {
+      name: "malformed",
+      input: "garbage-not-a-payload",
+      expect: function(r){ return r.ok === false; }
+    }
+  ];
+
+  var lines = [];
+  var allPass = true;
+  for (var i=0;i<fixtures.length;i++){
+    var f = fixtures[i];
+    var result;
+    try { result = parseFragment(f.input); }
+    catch(e) { result = { ok:false, error:"threw: " + e.message }; }
+    var pass;
+    try { pass = !!f.expect(result); } catch(e){ pass = false; }
+    if (!pass) allPass = false;
+    lines.push((pass ? "PASS" : "FAIL") + " — " + f.name);
+  }
+  lines.push("");
+  lines.push(allPass ? "ALL TESTS PASSED" : "SOME TESTS FAILED");
+  container.textContent = lines.join("\n");
+  container.hidden = false;
+}
+
+// ---------- boot ----------
+(function boot(){
+  var mugCanvas = document.getElementById("mugIcon");
+  drawMugIcon(mugCanvas);
+
+  var qs = window.location.search || "";
+  var hash = window.location.hash || "";
+  var fragment = hash.length > 1 ? decodeURIComponent(hash.substring(1)) : "";
+
+  if (qs.indexOf("selftest") !== -1) {
+    runSelfTest(document.getElementById("selftest"));
+  }
+
+  var appEl = document.getElementById("app");
+
+  if (fragment.length === 0 && qs.indexOf("demo") !== -1) {
+    fragment = DEMO_PAYLOAD;
+  }
+
+  if (fragment.length === 0) {
+    if (qs.indexOf("selftest") === -1) {
+      renderError(appEl, "No report data found in the link. Open this page via “Send to Phone” on the watch.");
+    }
+    return;
+  }
+
+  var parsed = parseFragment(fragment);
+  if (!parsed.ok) {
+    renderError(appEl, parsed.error);
+    return;
+  }
+  try {
+    renderReport(appEl, parsed.data);
+  } catch (e) {
+    renderError(appEl, "Something went wrong displaying this report.");
+  }
+})();
+
+window.addEventListener("resize", function(){
+  var c = document.getElementById("hrChart");
+  if (!c) return;
+  var hash = window.location.hash || "";
+  var qs = window.location.search || "";
+  var fragment = hash.length > 1 ? decodeURIComponent(hash.substring(1)) : (qs.indexOf("demo")!==-1 ? DEMO_PAYLOAD : "");
+  if (!fragment) return;
+  var parsed = parseFragment(fragment);
+  if (parsed.ok) {
+    try { drawChart(c, parsed.data); } catch(e) {}
+  }
+});
+</script>
+</body>
+</html>
