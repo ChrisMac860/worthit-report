@@ -605,6 +605,9 @@ function renderReport(container, data){
 
     for (var pj=0; pj<data.previous.length; pj++){
       var ps = data.previous[pj];
+      // The current session is already the highlighted row above; a payload
+      // that lists it again (older watch builds did) must not show it twice.
+      if (ps.sa === data.sa) { continue; }
       var pDur = (ps.en !== null && ps.sa !== null) ? fmtDur(Math.max(0, ps.en - ps.sa)) : "—";
       var ptr = document.createElement("tr");
       ptr.innerHTML = "<td>" + fmtDate(ps.sa) + "</td>" +
