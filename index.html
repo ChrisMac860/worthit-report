@@ -109,9 +109,10 @@
   .toolbar{
     display:flex;
     flex-wrap:wrap;
-    align-items:flex-start;
+    align-items:center;
     gap:var(--unit);
-    margin-bottom:calc(var(--unit)*2);
+    margin-top:calc(var(--unit)*3);
+    margin-bottom:var(--unit);
   }
   .sticker-status{
     font-size:12px;
@@ -351,14 +352,14 @@
   <div class="date" id="sessionDate">—</div>
 </div>
 
-<div class="toolbar">
-  <button id="stickerBtn" class="btn-pixel" type="button" hidden>Sticker for Instagram</button>
-  <div id="stickerStatus" class="sticker-status" hidden></div>
-</div>
-<img id="stickerPreview" class="sticker-preview" alt="Generated Instagram sticker preview" hidden>
-
 <div id="selftest" hidden></div>
 <div id="app"></div>
+
+<div class="toolbar">
+  <button id="stickerBtn" class="btn-pixel" type="button" hidden>Share</button>
+  <div id="stickerStatus" class="sticker-status" hidden></div>
+</div>
+<img id="stickerPreview" class="sticker-preview" alt="Shareable session card" hidden>
 
 <footer>
   <div class="footer-line">Association, not cause. Heart rate rises for many reasons.</div>
@@ -873,7 +874,7 @@ function renderError(container, message){
   container.appendChild(box);
 }
 
-// ---------- Instagram sticker ----------
+// ---------- shareable session card ----------
 // Offscreen 1080x1080 transparent PNG, drawn on a 108x108 design grid scaled x10.
 // Facts only: counts, times, HR numbers. No praise, no shame, no causal claim.
 function renderSticker(data){
@@ -1077,7 +1078,7 @@ function downloadSticker(url, fname, statusEl, btn){
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  statusEl.innerHTML = "Saved to your photos.<br>Instagram → your story → sticker tray → add from photos.";
+  statusEl.innerHTML = "Saved to your photos.<br>Add it to a story from your camera roll.";
   btn.disabled = false;
 }
 
