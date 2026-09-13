@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worth It? — Support</title>
+<style>
+  :root{color-scheme:dark;--bg:#000;--fg:#f2efe6;--dim:#aaa99f;--amber:#ffb01e;--line:#444}
+  *{box-sizing:border-box} body{max-width:760px;margin:auto;padding:24px 16px 48px;background:var(--bg);color:var(--fg);font:15px/1.6 ui-monospace,"Cascadia Mono",Consolas,monospace}
+  h1,h2{text-transform:uppercase;letter-spacing:1px} h1{color:var(--amber);font-size:24px} h2{font-size:17px;margin-top:32px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  a,a:visited{color:var(--amber)} li{margin-bottom:8px}
+</style>
+</head>
+<body>
+<header>
+  <p><a href="./">← Report</a> · <a href="privacy.html">Privacy</a></p>
+  <h1>Worth It? Support</h1>
+</header>
+
+<p>Worth It? is a session-based drink logger for supported Garmin watches. It records sessions on the watch and can optionally open a private, browser-based report on the paired phone.</p>
+
+<h2>Quick checks</h2>
+<ul>
+  <li><strong>No heart-rate data:</strong> confirm the SensorHistory permission is enabled and allow enough time for the watch to record samples.</li>
+  <li><strong>Could not reach phone:</strong> confirm the watch is paired and connected to Garmin Connect Mobile over Bluetooth, then try Send to phone again.</li>
+  <li><strong>Report will not open:</strong> confirm the phone has internet access to load the static page. Session data itself remains in the URL fragment.</li>
+  <li><strong>Delete everything:</strong> choose Menu → Delete all data in the app, or uninstall the app.</li>
+</ul>
+
+<h2>Report-page test</h2>
+<p>Open the <a href="./?selftest">built-in report self-test</a>. It should display <strong>ALL TESTS PASSED</strong>.</p>
+
+<h2>Contact and bug reports</h2>
+<p>Open an issue in the public <a href="https://github.com/ChrisMac860/worthit-report/issues/new" rel="noopener noreferrer">Worth It? support tracker</a>. Include your Garmin model, app version shown in the Connect IQ Store, what you expected, and what happened. Do not include private health data or a report URL containing a session fragment.</p>
+</body>
+</html>

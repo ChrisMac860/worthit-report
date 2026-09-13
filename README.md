@@ -55,13 +55,16 @@ nothing is uploaded anywhere.
 
 ## Support
 
-The footer's "Buy me a beer" link (`https://buymeacoffee.com/christopheosp`)
-is the page's **only outbound link**, styled natively in the page's own
-pixel-button chrome rather than the official embed script. It only ever
-fires if the reader taps it — the page still makes zero network requests on
-load.
+The footer links to the static [support page](support.html) and privacy policy.
+The "Buy me a beer" link (`https://buymeacoffee.com/christopheosp`) is styled
+natively in the page's own pixel-button chrome rather than using an embed
+script. Links only fire when the reader taps them — the report page still
+makes zero network requests on load.
 
 ## Privacy
+
+The public policy is available at
+<https://chrismac860.github.io/worthit-report/privacy.html>.
 
 The session payload lives **only in the URL fragment** (the part after `#`).
 Browsers never send the fragment to the server on a page load or navigation,
