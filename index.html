@@ -106,29 +106,62 @@
   .header .date{font-size:11px;color:var(--dim);text-transform:none;order:2;}
   canvas#mugIcon{image-rendering:pixelated;flex-shrink:0;}
 
-  .toolbar{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:center;
+  /* ---------- share panel ---------- */
+  .share-panel{
+    display:grid;
     gap:var(--unit);
     margin-top:calc(var(--unit)*3);
     margin-bottom:var(--unit);
   }
-  .sticker-status{
+  .share-row{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:var(--unit);
+  }
+  .share-main{align-items:flex-start;}
+  .share-actions{
+    display:grid;
+    gap:var(--unit);
+    flex:1 1 180px;
+    min-width:0;
+  }
+  .share-status{
     font-size:12px;
     color:var(--dim);
     line-height:1.5;
-    flex:1 1 200px;
+    min-height:1.5em;
   }
-  .sticker-preview{
+  .share-hint{
+    font-size:11px;
+    color:var(--dim);
+    line-height:1.5;
+    text-transform:none;
+  }
+  .share-preview{
     display:block;
     width:120px;
-    height:120px;
+    height:auto;
+    flex-shrink:0;
     image-rendering:pixelated;
     border:2px solid var(--line);
     background-image:repeating-conic-gradient(#111 0% 25%, #000 0% 50%);
     background-size:8px 8px;
   }
+  .share-preview.is-story{width:90px;}
+  .btn-pixel.btn-toggle[aria-pressed="true"]{
+    background:var(--amber);
+    color:#0a0a08;
+    box-shadow:
+      inset 2px 2px 0 rgba(255,255,255,0.35),
+      inset -2px -2px 0 var(--amber-deep);
+  }
+  .btn-pixel.btn-quiet{
+    color:var(--line);
+    border-color:var(--dim);
+    box-shadow:none;
+  }
+  .btn-pixel:disabled{opacity:0.5;cursor:default;}
 
   /* ---------- buttons (bevelled pixel) ---------- */
   .btn-pixel{
@@ -356,11 +389,24 @@
 <div id="selftest" hidden></div>
 <div id="app"></div>
 
-<div class="toolbar">
-  <button id="stickerBtn" class="btn-pixel" type="button" hidden>Share</button>
-  <div id="stickerStatus" class="sticker-status" hidden></div>
-</div>
-<img id="stickerPreview" class="sticker-preview" alt="Shareable session card" hidden>
+<section class="share-panel" id="sharePanel" aria-label="Share this report" hidden>
+  <div class="share-row" role="group" aria-label="Image format">
+    <button type="button" class="btn-pixel btn-toggle" data-format="story" aria-pressed="true">Story</button>
+    <button type="button" class="btn-pixel btn-toggle" data-format="sticker" aria-pressed="false">Sticker</button>
+  </div>
+  <div class="share-row share-main">
+    <img id="sharePreview" class="share-preview is-story" alt="Shareable session card" hidden>
+    <div class="share-actions">
+      <button id="shareBtn" class="btn-pixel" type="button" disabled>Preparing…</button>
+      <div class="share-row">
+        <button id="saveBtn" class="btn-pixel btn-quiet" type="button" hidden>Save</button>
+        <button id="copyBtn" class="btn-pixel btn-quiet" type="button" hidden>Copy image</button>
+      </div>
+      <div id="shareStatus" class="share-status" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+  <p class="share-hint" id="shareHint"></p>
+</section>
 
 <footer>
   <div class="footer-line">Association, not cause. Heart rate rises for many reasons.</div>
@@ -1039,108 +1085,176 @@ function renderSticker(data){
   return c;
 }
 
-// ---------- sticker share: eager build + synchronous share call ----------
-// navigator.share() requires transient user activation from the click. Any
-// await before calling it (even just `await document.fonts.ready`) pushes it
-// outside that window and iOS Safari / Android Chrome reject it silently. So
-// the File is built ONCE, eagerly, off the click path, and cached here; the
-// click handler then calls navigator.share() synchronously against the cache.
-var cachedStickerFile = null;
-var cachedStickerUrl = null;
-var cachedStickerFname = null;
-var cachedStickerBuildPromise = null;
+// ---------- share: build every format up front, then hand off in one tap ----------
+// navigator.share() and clipboard.write() need the click's transient user
+// activation, and any await before them (even `await document.fonts.ready`)
+// can spend it, so iOS Safari / Android Chrome reject the call. Both images
+// are therefore rendered, encoded and wrapped in Files once, off the click
+// path; the Share button stays disabled until they exist, and every click
+// handler below calls the platform API synchronously against that cache.
+//
+// Formats:
+//   story   - 1080x1920 opaque. Fills a story when shared straight into one.
+//   sticker - 1080x1080 transparent card. For laying over your own photo.
+// The report URL is never shared: it carries the whole session in its fragment.
+var SHARE_HINTS = {
+  story: "Full-screen image. Share it straight into a story or a chat.",
+  sticker: "Transparent card for your own photo. Save or copy it, then add it from your photos as a sticker."
+};
+var share = { format: "story", items: {}, data: null, busy: false };
 
-function buildStickerAsync(data){
-  if (cachedStickerBuildPromise) return cachedStickerBuildPromise;
-  cachedStickerBuildPromise = (async function(){
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
-    var canvas = renderSticker(data);
-    var blob = await new Promise(function(resolve){ canvas.toBlob(resolve, "image/png"); });
-    if (!blob) throw new Error("Couldn't generate the sticker.");
-    var dateSlug = fmtDate(data.sa).replace(/[^a-z0-9]+/gi,'-').toLowerCase().replace(/^-+|-+$/g,'') || "session";
-    var fname = "worth-it-" + dateSlug + ".png";
-    var url = URL.createObjectURL(blob);
+// The sticker card centred on a full-bleed, opaque 9:16 background, using the
+// page's dither motif so the empty space reads as part of the design.
+function renderStory(stickerCanvas){
+  var W = 1080, H = 1920, CELL = 10;
+  var c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  var ctx = c.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#050506";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#0D0D11";
+  for (var y = 0; y < H; y += CELL) {
+    for (var x = ((y / CELL) % 2) * CELL; x < W; x += CELL * 2) ctx.fillRect(x, y, CELL, CELL);
+  }
+  ctx.drawImage(stickerCanvas, 0, Math.round((H - stickerCanvas.height) / 2));
+  return c;
+}
+
+function canvasToItem(canvas, fname){
+  return new Promise(function(resolve){ canvas.toBlob(resolve, "image/png"); }).then(function(blob){
+    if (!blob) throw new Error("Couldn't generate the image.");
     var file = null;
-    try { file = new File([blob], fname, {type:"image/png"}); } catch(e) { file = null; }
-    cachedStickerFile = file;
-    cachedStickerUrl = url;
-    cachedStickerFname = fname;
-    return { file: file, url: url, fname: fname };
-  })();
-  return cachedStickerBuildPromise;
+    try { file = new File([blob], fname, { type: "image/png" }); } catch(e) { file = null; }
+    var canShare = false;
+    if (file && navigator.canShare) {
+      try { canShare = navigator.canShare({ files: [file] }); } catch(e) { canShare = false; }
+    }
+    return { blob: blob, file: file, url: URL.createObjectURL(blob), fname: fname, canShare: canShare };
+  });
 }
 
-function showStickerPreview(previewImg, url){
-  if (!previewImg || !url) return;
-  previewImg.src = url;
-  previewImg.hidden = false;
+function buildShareImages(data){
+  var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(function(){}) : Promise.resolve();
+  return ready.then(function(){
+    var sticker = renderSticker(data);
+    var slug = fmtDate(data.sa).replace(/[^a-z0-9]+/gi, "-").toLowerCase().replace(/^-+|-+$/g, "") || "session";
+    return Promise.all([
+      canvasToItem(renderStory(sticker), "worth-it-" + slug + "-story.png"),
+      canvasToItem(sticker, "worth-it-" + slug + "-sticker.png")
+    ]);
+  }).then(function(items){
+    share.items.story = items[0];
+    share.items.sticker = items[1];
+  });
 }
 
-function downloadSticker(url, fname, statusEl, btn){
+function canCopyImage(){
+  return !!(window.isSecureContext && navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem === "function");
+}
+
+function setShareStatus(text){
+  document.getElementById("shareStatus").textContent = text;
+}
+
+function updateShareUI(){
+  var item = share.items[share.format];
+  var btn = document.getElementById("shareBtn");
+  var save = document.getElementById("saveBtn");
+  var copy = document.getElementById("copyBtn");
+  var preview = document.getElementById("sharePreview");
+  var toggles = document.querySelectorAll("#sharePanel .btn-toggle");
+  for (var i = 0; i < toggles.length; i++) {
+    toggles[i].setAttribute("aria-pressed", toggles[i].getAttribute("data-format") === share.format ? "true" : "false");
+  }
+  document.getElementById("shareHint").textContent = SHARE_HINTS[share.format];
+  preview.className = "share-preview" + (share.format === "story" ? " is-story" : "");
+  if (!item) {
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    save.hidden = true;
+    copy.hidden = true;
+    return;
+  }
+  preview.src = item.url;
+  preview.hidden = false;
+  // The main button names what it will do: share where files can be shared,
+  // otherwise save. Save then only appears separately when it adds something.
+  btn.textContent = item.canShare ? "Share" : "Save image";
+  btn.disabled = share.busy;
+  save.hidden = !item.canShare;
+  save.disabled = share.busy;
+  copy.hidden = !canCopyImage();
+  copy.disabled = share.busy;
+}
+
+function saveShareItem(item){
   var a = document.createElement("a");
-  a.href = url;
-  a.download = fname;
+  a.href = item.url;
+  a.download = item.fname;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  statusEl.innerHTML = "Saved to your photos.<br>Add it to a story from your camera roll.";
-  btn.disabled = false;
+  setShareStatus("Saved " + item.fname + " to your downloads.");
 }
 
-// Click handler entry point. Stays SYNCHRONOUS up to navigator.share() so the
-// call still carries the click's transient user activation.
-function onStickerClick(data, btn, statusEl, previewImg){
-  if (cachedStickerFile && navigator.canShare && navigator.canShare({files:[cachedStickerFile]})) {
-    btn.disabled = true;
-    statusEl.hidden = false;
-    statusEl.textContent = "";
-    showStickerPreview(previewImg, cachedStickerUrl);
-    navigator.share({files:[cachedStickerFile], title:"Worth it?"}).then(function(){
-      statusEl.textContent = "";
-      btn.disabled = false;
-    }).catch(function(shareErr){
-      btn.disabled = false;
-      if (shareErr && shareErr.name === "AbortError") { statusEl.textContent = ""; return; } // user cancelled: stay silent
-      downloadSticker(cachedStickerUrl, cachedStickerFname, statusEl, btn);
+// SYNCHRONOUS up to navigator.share(), so it still carries the click's activation.
+function onShareClick(){
+  var item = share.items[share.format];
+  if (!item || share.busy) return;
+  if (!item.canShare) { saveShareItem(item); return; }
+  share.busy = true;
+  updateShareUI();
+  setShareStatus("");
+  navigator.share({ files: [item.file], title: "Worth it?" }).then(function(){
+    setShareStatus("Shared.");
+  }).catch(function(err){
+    if (err && err.name === "AbortError") { setShareStatus(""); return; } // user closed the sheet
+    setShareStatus("Couldn't open the share sheet here. Use Save instead.");
+  }).then(function(){
+    share.busy = false;
+    updateShareUI();
+  });
+}
+
+function onCopyClick(){
+  var item = share.items[share.format];
+  if (!item) return;
+  try {
+    navigator.clipboard.write([new ClipboardItem({ "image/png": item.blob })]).then(function(){
+      setShareStatus("Image copied. Paste it into a chat or post.");
+    }).catch(function(){
+      setShareStatus("Couldn't copy the image here. Use Save instead.");
     });
-    return;
+  } catch(e) {
+    setShareStatus("Couldn't copy the image here. Use Save instead.");
   }
-  if (cachedStickerFile && cachedStickerUrl) {
-    // built, but Web Share (with files) isn't available here -> download directly
-    btn.disabled = true;
-    statusEl.hidden = false;
-    showStickerPreview(previewImg, cachedStickerUrl);
-    downloadSticker(cachedStickerUrl, cachedStickerFname, statusEl, btn);
-    return;
-  }
-  // eager build hasn't finished yet (rare) -- fall back to the async path
-  handleStickerShare(data, btn, statusEl, previewImg);
 }
 
-async function handleStickerShare(data, btn, statusEl, previewImg){
-  btn.disabled = true;
-  statusEl.hidden = false;
-  statusEl.textContent = "Generating sticker…";
-  try{
-    var built = await buildStickerAsync(data);
-    if (!built || !built.url) { statusEl.textContent = "Couldn't generate the sticker. Try again."; btn.disabled = false; return; }
-    showStickerPreview(previewImg, built.url);
-    if (built.file && navigator.canShare && navigator.canShare({files:[built.file]})) {
-      try {
-        await navigator.share({files:[built.file], title:"Worth it?"});
-        statusEl.textContent = "";
-        btn.disabled = false;
-        return;
-      } catch(shareErr){
-        if (shareErr && shareErr.name === "AbortError") { statusEl.textContent = ""; btn.disabled = false; return; } // user cancelled: stay silent
-        /* unsupported / other error -> fall through to download */
-      }
-    }
-    downloadSticker(built.url, built.fname, statusEl, btn);
-  } catch(e){
-    statusEl.textContent = "Couldn't generate the sticker. Try again.";
-    btn.disabled = false;
+function initShare(data){
+  share.data = data;
+  document.getElementById("sharePanel").hidden = false;
+  var toggles = document.querySelectorAll("#sharePanel .btn-toggle");
+  for (var i = 0; i < toggles.length; i++) {
+    toggles[i].addEventListener("click", function(ev){
+      share.format = ev.currentTarget.getAttribute("data-format");
+      setShareStatus("");
+      updateShareUI();
+    });
   }
+  document.getElementById("shareBtn").addEventListener("click", onShareClick);
+  document.getElementById("saveBtn").addEventListener("click", function(){
+    var item = share.items[share.format];
+    if (item) saveShareItem(item);
+  });
+  document.getElementById("copyBtn").addEventListener("click", onCopyClick);
+  updateShareUI();
+  buildShareImages(data).then(updateShareUI, function(){
+    var btn = document.getElementById("shareBtn");
+    btn.textContent = "Unavailable";
+    btn.disabled = true;
+    setShareStatus("Couldn't generate the image on this device.");
+  });
 }
 
 // ---------- self test ----------
@@ -1214,16 +1328,8 @@ function runSelfTest(container){
   }
   try {
     renderReport(appEl, parsed.data);
-    var stickerBtn = document.getElementById("stickerBtn");
-    var stickerStatus = document.getElementById("stickerStatus");
-    var stickerPreview = document.getElementById("stickerPreview");
-    stickerBtn.hidden = false;
-    stickerBtn.addEventListener("click", function(){
-      onStickerClick(parsed.data, stickerBtn, stickerStatus, stickerPreview);
-    });
-    // Build the sticker eagerly, off the click path, so a tap can call
-    // navigator.share() synchronously (see onStickerClick / buildStickerAsync).
-    try { buildStickerAsync(parsed.data).catch(function(){}); } catch(e){}
+    // Images are built right away, off the click path (see initShare).
+    initShare(parsed.data);
   } catch (e) {
     renderError(appEl, "Something went wrong displaying this report.");
   }

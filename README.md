@@ -35,23 +35,42 @@ card layout:
 9. **An 8px spacing grid with deliberate asymmetry**, plus a two-column
    layout above 600px width.
 
-## Instagram sticker
+## Sharing
 
-The header's "Sticker for Instagram" button renders a 1080×1080
-**transparent-background** PNG on an offscreen canvas (`renderSticker()`),
-reusing the same pixel-art approach as the chart: chunky, `imageSmoothingEnabled=false`
-blocks scaled from a 108×108 design grid. It shows the beer count, duration,
-date, HR start/average/peak (nulls skipped), the Famous Last Words line if
-one was recorded, a small stepped HR trace, and a pixel mug — facts only, no
-praise or claims.
+Below the report, a share panel offers two images, both drawn on-device on
+offscreen canvases in the same pixel-art style as the chart:
 
-On tap: `canvas.toBlob` → `File` → if `navigator.canShare` accepts the file,
-`navigator.share()` hands it straight to the OS share sheet (Instagram
-accepts a shared PNG into a Story's sticker tray there). Otherwise the PNG
-downloads directly and the page shows a three-line note ("Saved to your
-photos. Instagram → your story → sticker tray → add from photos.") along
-with a preview of the generated image. Everything happens on-device —
-nothing is uploaded anywhere.
+- **Story** — 1080×1920, opaque. The session card centred on a full-bleed
+  dithered background, so it fills a story when shared straight into one.
+- **Sticker** — 1080×1080, **transparent** outside the card
+  (`renderSticker()`), for laying over your own photo.
+
+Both show the beer count, duration, date, HR start/average/peak (nulls
+skipped), the Famous Last Words line if one was recorded, a small stepped HR
+trace and a pixel mug — facts only, no praise or claims.
+
+How the share stays one tap:
+
+1. **Everything is prepared before the tap.** As soon as the report renders,
+   both images are encoded to PNG and wrapped in `File`s, and the preview
+   shows the selected one. `navigator.share()` and `clipboard.write()` need
+   the click's transient user activation, and any `await` before them can
+   spend it, so the Share button reads "Preparing…" (disabled) until the
+   files exist and every click handler then calls the platform API
+   synchronously.
+2. **Share** passes the file to `navigator.share({files})`, which opens the
+   OS share sheet (Instagram, WhatsApp, Messages, …) with the image already
+   attached. Cancelling the sheet stays silent.
+3. Where the browser cannot share files, the main button says **Save image**
+   and downloads the PNG instead. Where it can, **Save** is offered as well.
+4. **Copy image** (when the browser supports `ClipboardItem`) puts the PNG on
+   the clipboard to paste into a chat or post.
+
+The report URL is never shared: it carries the whole session in its
+fragment. A web page also cannot open Instagram's story composer directly
+with media pre-loaded (native apps do that with a platform-specific
+hand-off); from the share sheet, Instagram receives the image and you pick
+Story there. Everything happens on-device — nothing is uploaded anywhere.
 
 ## Support
 
