@@ -106,62 +106,185 @@
   .header .date{font-size:11px;color:var(--dim);text-transform:none;order:2;}
   canvas#mugIcon{image-rendering:pixelated;flex-shrink:0;}
 
-  /* ---------- share panel ---------- */
-  .share-panel{
-    display:grid;
-    gap:var(--unit);
+  .toolbar{
+    display:flex;
+    justify-content:center;
     margin-top:calc(var(--unit)*3);
     margin-bottom:var(--unit);
   }
-  .share-row{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:center;
-    gap:var(--unit);
+  .toolbar .btn-pixel{min-width:200px;justify-content:center;}
+
+  /* ---------- share screen (full-screen, opened from the Share button) ---------- */
+  .share-screen{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    max-width:none;
+    max-height:none;
+    margin:0;
+    padding:0;
+    border:0;
+    background:#050506;
+    color:var(--line);
+    font-family:inherit;
   }
-  .share-main{align-items:flex-start;}
-  .share-actions{
+  .share-screen[open]{display:flex;flex-direction:column;}
+  .share-screen::backdrop{background:#000;}
+  .ss-top{
     display:grid;
-    gap:var(--unit);
-    flex:1 1 180px;
-    min-width:0;
+    grid-template-columns:48px 1fr 48px;
+    align-items:center;
+    padding:calc(env(safe-area-inset-top, 0px) + var(--unit)) var(--unit) var(--unit);
+    border-bottom:2px solid #1c1c22;
   }
-  .share-status{
+  .ss-top h2{
+    margin:0;
+    text-align:center;
     font-size:12px;
-    color:var(--dim);
-    line-height:1.5;
-    min-height:1.5em;
+    letter-spacing:2px;
+    color:var(--amber);
   }
-  .share-hint{
-    font-size:11px;
+  .ss-close{
+    width:44px;
+    height:44px;
+    display:grid;
+    place-items:center;
+    background:none;
+    border:0;
+    color:var(--line);
+    cursor:pointer;
+  }
+  .ss-pager{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    overflow-x:auto;
+    scroll-snap-type:x mandatory;
+    scrollbar-width:none;
+    overscroll-behavior-x:contain;
+  }
+  .ss-pager::-webkit-scrollbar{display:none;}
+  .ss-slide{
+    flex:0 0 100%;
+    min-width:0;
+    margin:0;
+    scroll-snap-align:center;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    padding:calc(var(--unit)*2) calc(var(--unit)*3);
+  }
+  .ss-slide img{
+    display:block;
+    max-width:100%;
+    max-height:calc(100% - 28px);
+    min-height:0;
+    width:auto;
+    height:auto;
+    /* previews are downscaled; smooth scaling keeps the small type legible */
+    image-rendering:auto;
+    box-shadow:0 0 0 2px #1c1c22;
+  }
+  .ss-slide img.is-sticker{
+    background-image:repeating-conic-gradient(#16161b 0% 25%, #0b0b0e 0% 50%);
+    background-size:16px 16px;
+  }
+  .ss-slide figcaption{
+    font-size:10px;
+    letter-spacing:2px;
     color:var(--dim);
+    text-transform:uppercase;
+  }
+  .ss-dots{
+    display:flex;
+    justify-content:center;
+    gap:4px;
+  }
+  .ss-dots button{
+    width:24px;
+    height:24px;
+    padding:0;
+    background:none;
+    border:0;
+    cursor:pointer;
+    display:grid;
+    place-items:center;
+  }
+  .ss-dots button::before{
+    content:"";
+    width:8px;
+    height:8px;
+    background:#2a2a32;
+  }
+  .ss-dots button[aria-current="true"]::before{background:var(--amber);}
+  .ss-bottom{
+    display:grid;
+    gap:12px;
+    justify-items:center;
+    padding:var(--unit) calc(var(--unit)*2) calc(env(safe-area-inset-bottom, 0px) + calc(var(--unit)*3));
+  }
+  .ss-hint{
+    margin:0;
+    min-height:3em;
+    max-width:34ch;
+    text-align:center;
+    font-size:11px;
     line-height:1.5;
+    color:var(--dim);
     text-transform:none;
   }
-  .share-preview{
-    display:block;
-    width:120px;
-    height:auto;
-    flex-shrink:0;
-    image-rendering:pixelated;
-    border:2px solid var(--line);
-    background-image:repeating-conic-gradient(#111 0% 25%, #000 0% 50%);
-    background-size:8px 8px;
+  .ss-actions{
+    display:flex;
+    justify-content:center;
+    gap:28px;
   }
-  .share-preview.is-story{width:90px;}
-  .btn-pixel.btn-toggle[aria-pressed="true"]{
+  .ss-action{
+    display:grid;
+    justify-items:center;
+    gap:8px;
+    background:none;
+    border:0;
+    padding:0;
+    color:var(--line);
+    font-family:inherit;
+    font-size:10px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .ss-icon{
+    width:56px;
+    height:56px;
+    display:grid;
+    place-items:center;
+    background:#121217;
+    color:var(--amber);
+    box-shadow:inset 2px 2px 0 #26262e, inset -2px -2px 0 #000;
+  }
+  .ss-action.is-primary .ss-icon{
     background:var(--amber);
     color:#0a0a08;
-    box-shadow:
-      inset 2px 2px 0 rgba(255,255,255,0.35),
-      inset -2px -2px 0 var(--amber-deep);
+    box-shadow:inset 2px 2px 0 rgba(255,255,255,0.35), inset -2px -2px 0 var(--amber-deep);
   }
-  .btn-pixel.btn-quiet{
-    color:var(--line);
-    border-color:var(--dim);
-    box-shadow:none;
+  .ss-action:active .ss-icon{transform:translate(1px,1px);}
+  .ss-action:disabled{opacity:0.4;cursor:default;}
+  .ss-action:focus-visible .ss-icon, .ss-close:focus-visible, .ss-dots button:focus-visible{
+    outline:2px solid var(--amber);
+    outline-offset:2px;
   }
-  .btn-pixel:disabled{opacity:0.5;cursor:default;}
+  .share-status{
+    min-height:1.5em;
+    font-size:11px;
+    line-height:1.5;
+    color:var(--amber);
+    text-align:center;
+    text-transform:none;
+  }
+  .ss-icon svg, .ss-close svg{shape-rendering:crispEdges;}
+  html.share-locked, html.share-locked body{overflow:hidden;}
 
   /* ---------- buttons (bevelled pixel) ---------- */
   .btn-pixel{
@@ -389,24 +512,40 @@
 <div id="selftest" hidden></div>
 <div id="app"></div>
 
-<section class="share-panel" id="sharePanel" aria-label="Share this report" hidden>
-  <div class="share-row" role="group" aria-label="Image format">
-    <button type="button" class="btn-pixel btn-toggle" data-format="story" aria-pressed="true">Story</button>
-    <button type="button" class="btn-pixel btn-toggle" data-format="sticker" aria-pressed="false">Sticker</button>
+<div class="toolbar">
+  <button id="shareOpenBtn" class="btn-pixel" type="button" hidden>Share</button>
+</div>
+
+<dialog id="shareScreen" class="share-screen" aria-labelledby="shareTitle">
+  <div class="ss-top">
+    <button type="button" class="ss-close" id="shareClose" aria-label="Close"><svg width="20" height="20" viewBox="0 0 10 10" aria-hidden="true" fill="currentColor"><rect x="1" y="1" width="2" height="2"/><rect x="3" y="3" width="2" height="2"/><rect x="5" y="5" width="2" height="2"/><rect x="7" y="7" width="2" height="2"/><rect x="7" y="1" width="2" height="2"/><rect x="5" y="3" width="2" height="2"/><rect x="3" y="5" width="2" height="2"/><rect x="1" y="7" width="2" height="2"/></svg></button>
+    <h2 id="shareTitle">Share</h2>
+    <span></span>
   </div>
-  <div class="share-row share-main">
-    <img id="sharePreview" class="share-preview is-story" alt="Shareable session card" hidden>
-    <div class="share-actions">
-      <button id="shareBtn" class="btn-pixel" type="button" disabled>Preparing…</button>
-      <div class="share-row">
-        <button id="saveBtn" class="btn-pixel btn-quiet" type="button" hidden>Save</button>
-        <button id="copyBtn" class="btn-pixel btn-quiet" type="button" hidden>Copy image</button>
-      </div>
-      <div id="shareStatus" class="share-status" role="status" aria-live="polite"></div>
+  <div class="ss-pager" id="sharePager" aria-label="Image formats">
+    <figure class="ss-slide" data-format="story">
+      <img id="previewStory" alt="Story image, 9:16, of this session's card">
+      <figcaption>Story · 9:16</figcaption>
+    </figure>
+    <figure class="ss-slide" data-format="sticker">
+      <img id="previewSticker" class="is-sticker" alt="Sticker image of this session's card with a transparent background">
+      <figcaption>Sticker · transparent</figcaption>
+    </figure>
+  </div>
+  <div class="ss-dots" role="group" aria-label="Choose format">
+    <button type="button" data-format="story" aria-label="Story" aria-current="true"></button>
+    <button type="button" data-format="sticker" aria-label="Sticker" aria-current="false"></button>
+  </div>
+  <div class="ss-bottom">
+    <p class="ss-hint" id="shareHint"></p>
+    <div class="ss-actions">
+      <button type="button" class="ss-action is-primary" id="shareBtn" disabled><span class="ss-icon"><svg width="28" height="28" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="6" y="1" width="2" height="8"/><rect x="4" y="3" width="6" height="2"/><rect x="5" y="2" width="4" height="1"/><rect x="1" y="7" width="2" height="6"/><rect x="11" y="7" width="2" height="6"/><rect x="1" y="11" width="12" height="2"/></svg></span><span>Share</span></button>
+      <button type="button" class="ss-action" id="saveBtn" disabled><span class="ss-icon"><svg width="28" height="28" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="6" y="1" width="2" height="7"/><rect x="4" y="6" width="6" height="2"/><rect x="5" y="8" width="4" height="1"/><rect x="1" y="7" width="2" height="6"/><rect x="11" y="7" width="2" height="6"/><rect x="1" y="11" width="12" height="2"/></svg></span><span>Save</span></button>
+      <button type="button" class="ss-action" id="copyBtn" hidden><span class="ss-icon"><svg width="28" height="28" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><rect x="1" y="1" width="8" height="2"/><rect x="1" y="1" width="2" height="8"/><rect x="5" y="5" width="8" height="8"/><rect x="7" y="7" width="4" height="4" fill="#121217"/></svg></span><span>Copy</span></button>
     </div>
+    <div class="share-status" id="shareStatus" role="status" aria-live="polite"></div>
   </div>
-  <p class="share-hint" id="shareHint"></p>
-</section>
+</dialog>
 
 <footer>
   <div class="footer-line">Association, not cause. Heart rate rises for many reasons.</div>
@@ -1099,7 +1238,7 @@ function renderSticker(data){
 // The report URL is never shared: it carries the whole session in its fragment.
 var SHARE_HINTS = {
   story: "Full-screen image. Share it straight into a story or a chat.",
-  sticker: "Transparent card for your own photo. Save or copy it, then add it from your photos as a sticker."
+  sticker: "Transparent card to lay over your own photo. Save or copy it, then add it as a sticker."
 };
 var share = { format: "story", items: {}, data: null, busy: false };
 
@@ -1159,33 +1298,30 @@ function setShareStatus(text){
 
 function updateShareUI(){
   var item = share.items[share.format];
-  var btn = document.getElementById("shareBtn");
-  var save = document.getElementById("saveBtn");
-  var copy = document.getElementById("copyBtn");
-  var preview = document.getElementById("sharePreview");
-  var toggles = document.querySelectorAll("#sharePanel .btn-toggle");
-  for (var i = 0; i < toggles.length; i++) {
-    toggles[i].setAttribute("aria-pressed", toggles[i].getAttribute("data-format") === share.format ? "true" : "false");
+  var shareBtn = document.getElementById("shareBtn");
+  var saveBtn = document.getElementById("saveBtn");
+  var copyBtn = document.getElementById("copyBtn");
+  var dots = document.querySelectorAll("#shareScreen .ss-dots button");
+  for (var i = 0; i < dots.length; i++) {
+    dots[i].setAttribute("aria-current", dots[i].getAttribute("data-format") === share.format ? "true" : "false");
   }
   document.getElementById("shareHint").textContent = SHARE_HINTS[share.format];
-  preview.className = "share-preview" + (share.format === "story" ? " is-story" : "");
+  if (share.items.story) document.getElementById("previewStory").src = share.items.story.url;
+  if (share.items.sticker) document.getElementById("previewSticker").src = share.items.sticker.url;
   if (!item) {
-    btn.disabled = true;
-    btn.textContent = "Preparing…";
-    save.hidden = true;
-    copy.hidden = true;
+    shareBtn.disabled = true;
+    saveBtn.disabled = true;
+    copyBtn.hidden = true;
     return;
   }
-  preview.src = item.url;
-  preview.hidden = false;
-  // The main button names what it will do: share where files can be shared,
-  // otherwise save. Save then only appears separately when it adds something.
-  btn.textContent = item.canShare ? "Share" : "Save image";
-  btn.disabled = share.busy;
-  save.hidden = !item.canShare;
-  save.disabled = share.busy;
-  copy.hidden = !canCopyImage();
-  copy.disabled = share.busy;
+  // Where files can be shared, Share leads and Save sits beside it. Where they
+  // can't, Share is not offered at all and Save takes the lead.
+  shareBtn.hidden = !item.canShare;
+  shareBtn.disabled = share.busy;
+  saveBtn.classList.toggle("is-primary", !item.canShare);
+  saveBtn.disabled = share.busy;
+  copyBtn.hidden = !canCopyImage();
+  copyBtn.disabled = share.busy;
 }
 
 function saveShareItem(item){
@@ -1231,17 +1367,59 @@ function onCopyClick(){
   }
 }
 
+function openShareScreen(){
+  var dlg = document.getElementById("shareScreen");
+  document.documentElement.classList.add("share-locked");
+  setShareStatus("");
+  if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+  var pager = document.getElementById("sharePager");
+  pager.scrollLeft = (share.format === "sticker" ? 1 : 0) * pager.clientWidth;
+}
+
+function closeShareScreen(){
+  var dlg = document.getElementById("shareScreen");
+  if (typeof dlg.close === "function") dlg.close(); else dlg.removeAttribute("open");
+  document.documentElement.classList.remove("share-locked");
+}
+
+function showFormat(format, smooth){
+  var pager = document.getElementById("sharePager");
+  var index = format === "sticker" ? 1 : 0;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  pager.scrollTo({ left: index * pager.clientWidth, behavior: (smooth && !reduce) ? "smooth" : "auto" });
+}
+
 function initShare(data){
   share.data = data;
-  document.getElementById("sharePanel").hidden = false;
-  var toggles = document.querySelectorAll("#sharePanel .btn-toggle");
-  for (var i = 0; i < toggles.length; i++) {
-    toggles[i].addEventListener("click", function(ev){
-      share.format = ev.currentTarget.getAttribute("data-format");
-      setShareStatus("");
-      updateShareUI();
+  var openBtn = document.getElementById("shareOpenBtn");
+  var dlg = document.getElementById("shareScreen");
+  var pager = document.getElementById("sharePager");
+  openBtn.hidden = false;
+  openBtn.addEventListener("click", openShareScreen);
+  document.getElementById("shareClose").addEventListener("click", closeShareScreen);
+  // Esc / back gesture closes the dialog natively; keep the page lock in step.
+  dlg.addEventListener("close", function(){ document.documentElement.classList.remove("share-locked"); });
+
+  // The slide in view is the format the buttons act on.
+  var ticking = false;
+  pager.addEventListener("scroll", function(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){
+      ticking = false;
+      var format = Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth)) >= 1 ? "sticker" : "story";
+      if (format !== share.format) {
+        share.format = format;
+        setShareStatus("");
+        updateShareUI();
+      }
     });
+  });
+  var dots = document.querySelectorAll("#shareScreen .ss-dots button");
+  for (var i = 0; i < dots.length; i++) {
+    dots[i].addEventListener("click", function(ev){ showFormat(ev.currentTarget.getAttribute("data-format"), true); });
   }
+
   document.getElementById("shareBtn").addEventListener("click", onShareClick);
   document.getElementById("saveBtn").addEventListener("click", function(){
     var item = share.items[share.format];
@@ -1249,10 +1427,11 @@ function initShare(data){
   });
   document.getElementById("copyBtn").addEventListener("click", onCopyClick);
   updateShareUI();
-  buildShareImages(data).then(updateShareUI, function(){
-    var btn = document.getElementById("shareBtn");
-    btn.textContent = "Unavailable";
-    btn.disabled = true;
+  setShareStatus("Preparing…");
+  buildShareImages(data).then(function(){
+    setShareStatus("");
+    updateShareUI();
+  }, function(){
     setShareStatus("Couldn't generate the image on this device.");
   });
 }

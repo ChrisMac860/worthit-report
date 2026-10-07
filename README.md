@@ -49,22 +49,24 @@ Both show the beer count, duration, date, HR start/average/peak (nulls
 skipped), the Famous Last Words line if one was recorded, a small stepped HR
 trace and a pixel mug — facts only, no praise or claims.
 
-How the share stays one tap:
+How it works:
 
 1. **Everything is prepared before the tap.** As soon as the report renders,
-   both images are encoded to PNG and wrapped in `File`s, and the preview
-   shows the selected one. `navigator.share()` and `clipboard.write()` need
-   the click's transient user activation, and any `await` before them can
-   spend it, so the Share button reads "Preparing…" (disabled) until the
-   files exist and every click handler then calls the platform API
-   synchronously.
-2. **Share** passes the file to `navigator.share({files})`, which opens the
-   OS share sheet (Instagram, WhatsApp, Messages, …) with the image already
-   attached. Cancelling the sheet stays silent.
-3. Where the browser cannot share files, the main button says **Save image**
-   and downloads the PNG instead. Where it can, **Save** is offered as well.
-4. **Copy image** (when the browser supports `ClipboardItem`) puts the PNG on
-   the clipboard to paste into a chat or post.
+   both images are encoded to PNG and wrapped in `File`s in the background.
+2. **Share** under the report opens a full-screen share screen: a large
+   preview you swipe between Story and Sticker (dots underneath), a one-line
+   hint, and a row of actions at the bottom. Close it with × or Esc / back.
+3. **Share** (on the screen) passes the visible format's file to
+   `navigator.share({files})`, which opens the OS share sheet (Instagram,
+   WhatsApp, Messages, …) with the image already attached. Cancelling the
+   sheet stays silent. `navigator.share()` and `clipboard.write()` need the
+   click's transient user activation and any `await` before them can spend
+   it, so every action calls the platform API synchronously against the
+   prepared files.
+4. Where the browser cannot share files, Share is not offered and **Save**
+   leads; otherwise Save sits beside it and downloads the PNG.
+5. **Copy** (when the browser supports `ClipboardItem`) puts the PNG on the
+   clipboard to paste into a chat or post.
 
 The report URL is never shared: it carries the whole session in its
 fragment. A web page also cannot open Instagram's story composer directly
